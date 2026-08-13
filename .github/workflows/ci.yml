@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
@@ -31,10 +31,25 @@ jobs:
       - name: Smoke test - direct run --help
         run: python watch-cc.py --help
 
-      - name: Smoke test - --list (empty projects dir is fine, just must not crash)
+      - name: Smoke test - --list against fixture
         env:
           PYTHONIOENCODING: utf-8
-        run: python watch-cc.py --projects ./no-such-dir --list
+        run: |
+          python watch-cc.py --projects ./tests/fixtures/projects --list
+
+      - name: Smoke test - --all against fixture
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          python watch-cc.py --projects ./tests/fixtures/projects test-sess --all --ascii
+
+      - name: Smoke test - --grep and --tail against fixture
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          python watch-cc.py --projects ./tests/fixtures/projects test-sess --all --grep "目录" --ascii
+          python watch-cc.py --projects ./tests/fixtures/projects test-sess --tail 2 --ascii
+          python watch-cc.py --projects ./tests/fixtures/projects test-sess --all --raw
 
       - name: Build check - install as a package
         run: |

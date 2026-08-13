@@ -8,12 +8,11 @@ version = "1.0.0"
 description = "实时查看 Claude Code 会话的完整输入输出(纯标准库,零依赖)"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 authors = [{ name = "watch-cc" }]
 keywords = ["claude-code", "cli", "transcript", "debug", "observability"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",

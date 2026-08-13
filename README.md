@@ -33,7 +33,7 @@ Claude Code 在运行时会把每一轮对话、工具调用、token 用量等**
 python3 watch-cc.py
 ```
 
-要求 **Python 3.7+**。仅此而已,无需安装任何包。
+要求 **Python 3.8+**。仅此而已,无需安装任何包。
 
 ### 方式二:配置成全局命令 `watch-cc`
 
@@ -140,7 +140,7 @@ python -m build                                 # 本地构建 wheel/sdist,产�
 
 仓库自带两个 GitHub Actions workflow:
 
-- `.github/workflows/ci.yml` —— 每次 push / PR 在 Ubuntu/macOS/Windows × Python 3.7–3.13 上跑烟雾测试(`--help`、`--list`、`pip install .`、entry point 校验)。
+- `.github/workflows/ci.yml` —— 每次 push / PR 在 Ubuntu/macOS/Windows × Python 3.8–3.13 上跑烟雾测试(`--help`、`--list`、`--all`、`--grep`、`pip install .`、entry point 校验)。
 - `.github/workflows/release.yml` —— 打 `v*` tag 时触发:构建 → 发 PyPI → 创建 GitHub Release。
 
 ### 发布到 PyPI(首次配置,一次性)
