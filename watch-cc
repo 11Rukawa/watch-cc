@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+# macOS / Linux shim:把 watch-cc 暴露成命令。
+# 安装:把这个文件(和 watch-cc.py)放到 PATH 里的某个目录,赋予可执行权限:
+#   chmod +x watch-cc
+# 确保同目录下有 watch-cc.py,或修改下面的 SCRIPT 路径。
+SCRIPT="$(dirname "$(command -v -- "$0" 2>/dev/null || echo "$0")")/watch-cc.py"
+[ -f "$SCRIPT" ] || SCRIPT="$HOME/.claude/bin/watch-cc.py"
+export PYTHONIOENCODING=utf-8
+exec python3 "$SCRIPT" "$@"

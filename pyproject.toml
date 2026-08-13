@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "watch-cc"
+version = "1.0.0"
+description = "实时查看 Claude Code 会话的完整输入输出(纯标准库,零依赖)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.7"
+authors = [{ name = "watch-cc" }]
+keywords = ["claude-code", "cli", "transcript", "debug", "observability"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+    "Topic :: System :: Logging",
+    "Topic :: Utilities",
+]
+# 无任何运行时依赖
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/your-username/watch-cc"
+Issues = "https://github.com/your-username/watch-cc/issues"
+Source = "https://github.com/your-username/watch-cc"
+
+[project.scripts]
+watch-cc = "watch_cc:main"
+
+[tool.setuptools]
+py-modules = ["watch_cc"]
+

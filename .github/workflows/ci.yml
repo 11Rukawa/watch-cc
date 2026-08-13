@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python-version }} on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Show environment
+        run: python -c "import sys; print(sys.version, sys.platform)"
+
+      - name: Smoke test - direct run --help
+        run: python watch-cc.py --help
+
+      - name: Smoke test - --list (empty projects dir is fine, just must not crash)
+        env:
+          PYTHONIOENCODING: utf-8
+        run: python watch-cc.py --projects ./no-such-dir --list
+
+      - name: Build check - install as a package
+        run: |
+          pip install --upgrade pip
+          pip install .
+
+      - name: Smoke test - installed entry point
+        run: watch-cc --help

@@ -1,0 +1,97 @@
+name: Release
+
+# 打 v* 形式的 tag 时触发,例如 v1.0.0、v1.2.3
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling
+        run: pip install --upgrade build
+
+      - name: Show version from tag
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "Releasing version: ${TAG#v}"
+
+      - name: Verify tag matches pyproject version
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          PY_VERSION=$(grep -m1 '^version' pyproject.toml | sed -E 's/version *= *"([^"]*)".*/\1/')
+          echo "tag=${TAG_VERSION}  pyproject=${PY_VERSION}"
+          if [ "$TAG_VERSION" != "$PY_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match pyproject.toml version ($PY_VERSION)"
+            echo "::error::请先在 pyproject.toml 里把 version 改成 \"$TAG_VERSION\",提交后再打 tag。"
+            exit 1
+          fi
+
+      - name: Build wheel and sdist
+        run: python -m build
+
+      - name: Verify built artifacts
+        run: |
+          ls -la dist/
+          python -m pip install --upgrade twine
+          twine check dist/*
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi   # 需要在 GitHub 仓库 Settings → Environments 里建一个叫 pypi 的环境
+    permissions:
+      id-token: write   # OIDC trusted publisher 必需
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # 用 trusted publisher 方式,无需 PyPI API token。
+        # 前置配置见 README "发布到 PyPI" 一节。
+
+  github-release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true   # 自动从 commit/PR 生成 changelog
+          files: dist/*
