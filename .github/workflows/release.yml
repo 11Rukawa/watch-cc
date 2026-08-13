@@ -20,23 +20,13 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tooling
-        run: pip install --upgrade build
+        run: pip install --upgrade build setuptools-scm
 
-      - name: Show version from tag
+      - name: Show resolved version (from git tag via setuptools-scm)
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          echo "Releasing version: ${TAG#v}"
-
-      - name: Verify tag matches pyproject version
-        run: |
-          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
-          PY_VERSION=$(grep -m1 '^version' pyproject.toml | sed -E 's/version *= *"([^"]*)".*/\1/')
-          echo "tag=${TAG_VERSION}  pyproject=${PY_VERSION}"
-          if [ "$TAG_VERSION" != "$PY_VERSION" ]; then
-            echo "::error::Tag version ($TAG_VERSION) does not match pyproject.toml version ($PY_VERSION)"
-            echo "::error::请先在 pyproject.toml 里把 version 改成 \"$TAG_VERSION\",提交后再打 tag。"
-            exit 1
-          fi
+          echo "Tag: $TAG"
+          echo "Resolved package version: $(python -m setuptools_scm)"
 
       - name: Build wheel and sdist
         run: python -m build

@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=61", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "watch-cc"
-version = "1.0.0"
+dynamic = ["version"]
 description = "实时查看 Claude Code 会话的完整输入输出(纯标准库,零依赖)"
 readme = "README.md"
 license = { text = "MIT" }
@@ -38,4 +38,10 @@ watch-cc = "watch_cc:main"
 
 [tool.setuptools]
 py-modules = ["watch_cc"]
+
+[tool.setuptools_scm]
+# 从 git tag 自动推断版本号。
+# v1.2.3 -> 1.2.3 ;  tag 之后的提交 -> 1.2.4.devN+gXXXXXX (仅本地构建,不会发 PyPI)
+# 构建时需要 git tag 存在;CI 里 checkout 已带 fetch-depth: 0 拿全量 tag。
+# 这是构建期依赖,不增加运行时依赖(仍是零)。
 

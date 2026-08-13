@@ -60,4 +60,5 @@ Thumbs.db
 # ===== 项目本地 =====
 # 本地开发的 transcript 样本(不要提交真实会话内容)
 *.jsonl
-samples/*.jsonl
+# 但 tests/ 下的 fixture 必须提交(CI 依赖它)
+!tests/**/*.jsonl

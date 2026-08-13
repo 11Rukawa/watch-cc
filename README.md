@@ -158,17 +158,20 @@ python -m build                                 # 本地构建 wheel/sdist,产�
 
 ### 发版步骤
 
+版本号由 git tag 驱动(`setuptools-scm` 自动从 tag 读取),无需手动改 `pyproject.toml`。
+
 ```bash
-# 1. 把 pyproject.toml 里的 version 改成目标版本号,例如 1.1.0
-# 2. 更新 CHANGELOG.md
-# 3. 提交并打 tag(tag 必须带 v 前缀,且去掉 v 后要和 pyproject version 完全一致)
+# 1. 更新 CHANGELOG.md
+# 2. 提交改动
 git commit -am "release v1.1.0"
+# 3. 打 tag(必须带 v 前缀,版本号即发布的版本)
 git tag v1.1.0
+# 4. 推送 tag,触发自动发布
 git push origin v1.1.0
-# 4. release.yml 自动触发:校验版本一致 → 构建 → 发 PyPI → 建 GitHub Release
+# 5. release.yml 自动触发:构建(tag 驱动版本号)→ 发 PyPI → 建 GitHub Release
 ```
 
-CI 会校验 tag 版本与 `pyproject.toml` 里的 `version` 是否一致,不一致直接报错,防止发错版本。
+打 `v1.1.0` 就发 `1.1.0`,完全不需要改 `pyproject.toml`。PyPI 不允许覆盖已发版本,所以每次发版必须用新 tag / 新版本号。
 
 ## 许可证
 
