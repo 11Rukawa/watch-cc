@@ -74,6 +74,8 @@ watch-cc <id> --all          # 全量回放整个会话历史后退出
 watch-cc <id> --tail 50      # 只看最后 50 条
 watch-cc <id> --all --grep "关键词"   # 全量回放 + 按关键词过滤
 watch-cc <id> --raw          # 打印每行原始 JSON(等价 jq .)
+watch-cc --resume <id>       # 在会话原工作目录起新 claude 进程并 resume 该会话
+watch-cc --path <id>         # 只输出该会话 transcript 文件的完整路径
 watch-cc --ascii             # 纯 ASCII 模式(老终端 / 中文乱码时用)
 watch-cc --projects <路径>   # 指向自定义的 transcript 目录
 ```

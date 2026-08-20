@@ -5,6 +5,13 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-20
+### Added
+- 新增 `--resume <sessionId前缀>`:把前缀解析成唯一会话后,在会话原工作目录
+  (取自 transcript 的 cwd 字段)启动新的 `claude --resume` 进程,恢复该会话。
+- 新增 `--path <sessionId前缀>`:把前缀解析成唯一会话后,输出其 transcript 文件
+  的完整路径(方便管道/脚本使用)。
+
 ## [1.0.3] - 2026-08-13
 ### Fixed
 - 修复 v1.0.3 tag 与 v1.0.2 指向同一 commit 导致 setuptools-scm 解析为 1.0.2 的问题,

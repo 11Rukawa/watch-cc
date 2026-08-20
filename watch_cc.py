@@ -17,6 +17,8 @@ transcript 文件(~/.claude/projects/<项目>/*.jsonl)。本工具读取这些�
     watch-cc <id> --tail 50      # 只看最后 50 条
     watch-cc <id> --all --grep "关键词"
     watch-cc <id> --raw          # 打印每行原始 JSON(等价 jq .)
+    watch-cc --resume <id>       # 在原会话工作目录起新 claude 进程并 resume 该会话
+    watch-cc --path <id>         # 输出该会话 transcript 文件的完整路径
     watch-cc --ascii             # 纯 ASCII 模式(老终端 / 无 Unicode 时用)
 
 也可直接:  python watch-cc.py [选项]
@@ -222,6 +224,10 @@ def main():
     ap.add_argument("--grep", default=None, help="只显示包含该关键词的消息(忽略大小写)")
     ap.add_argument("--ascii", action="store_true", help="纯 ASCII 框线,不依赖 Unicode/ANSI(老终端用)")
     ap.add_argument("--projects", default=None, help=f"Claude transcript 目录(默认 {DEFAULT_PROJ})")
+    ap.add_argument("--resume", default=None, metavar="ID",
+                    help="在会话原工作目录起新的 claude 进程并 resume 该会话(参数为 session id 前缀)")
+    ap.add_argument("--path", dest="path_opt", default=None, metavar="ID",
+                    help="只输出该会话 transcript 文件的完整路径(参数为 session id 前缀)")
     args = ap.parse_args()
 
     # 允许指向非默认的 projects 目录
@@ -236,6 +242,44 @@ def main():
         global RENDER_MARK_USER, RENDER_MARK_ASST
         RENDER_MARK_USER = ">> 你"
         RENDER_MARK_ASST = "<< Claude"
+
+    # --path <前缀>:解析成唯一 session 后,只输出 transcript 文件完整路径
+    if args.path_opt:
+        prefix = args.path_opt
+        rows = list_sessions()
+        matches = [r[0] for r in rows if os.path.basename(r[0]).startswith(prefix)]
+        if not matches:
+            sys.exit(f"找不到匹配 '{prefix}' 的 session")
+        if len(matches) > 1:
+            sys.exit(f"session 前缀 '{prefix}' 匹配到 {len(matches)} 个,请用更长的前缀:\n  "
+                     + "\n  ".join(os.path.basename(m) for m in matches))
+        print(matches[0])
+        return
+
+    # --resume <前缀>:解析成唯一 session 后,在原工作目录起新 claude 进程恢复会话
+    if args.resume:
+        prefix = args.resume
+        rows = list_sessions()
+        matches = [r[0] for r in rows if os.path.basename(r[0]).startswith(prefix)]
+        if not matches:
+            sys.exit(f"找不到匹配 '{prefix}' 的 session")
+        if len(matches) > 1:
+            sys.exit(f"session 前缀 '{prefix}' 匹配到 {len(matches)} 个,请用更长的前缀:\n  "
+                     + "\n  ".join(os.path.basename(m) for m in matches))
+        path = matches[0]
+        sid = os.path.basename(path)[:-6]
+        # 会话原工作目录(从 transcript 头部 cwd 字段取,取不到退回用户目录)
+        _, cwd, _, _ = _read_meta(path)
+        if not cwd or not os.path.isdir(cwd):
+            cwd = os.path.expanduser("~")
+        import shutil
+        claude_bin = shutil.which("claude")
+        if not claude_bin:
+            sys.exit("找不到 claude 可执行文件,请确认已安装并在 PATH 中")
+        print(f"{C['c']}→ resume 会话 {sid}\n  工作目录 {cwd}{C['x']}", flush=True)
+        import subprocess
+        rc = subprocess.call([claude_bin, "--resume", sid], cwd=cwd)
+        sys.exit(rc)
 
     # --list:只列出不跟踪
     if args.list:
