@@ -19,6 +19,8 @@ transcript 文件(~/.claude/projects/<项目>/*.jsonl)。本工具读取这些�
     watch-cc <id> --raw          # 打印每行原始 JSON(等价 jq .)
     watch-cc --resume <id>       # 在原会话工作目录起新 claude 进程并 resume 该会话
     watch-cc --path <id>         # 输出该会话 transcript 文件的完整路径
+    watch-cc --trace <id>        # 输出该会话的"思维链条"(想法/工具/命令总结)
+    watch-cc --trace <id> --think 1000   # thinking 每段最多显示 1000 字符
     watch-cc --ascii             # 纯 ASCII 模式(老终端 / 无 Unicode 时用)
 
 也可直接:  python watch-cc.py [选项]
@@ -213,6 +215,172 @@ def render(line, raw=False):
         return f"{C['dim']}[{typ}]{C['x']}"
     return f"{C['dim']}[{typ}] {line[:200]}{C['x']}"
 
+# ---------------------------------------------------------------------------
+# --trace 模式:输出会话的"思维链条"
+# 每轮展示:用户输入 → ◆想法(thinking) → ▶工具调用(附一句话摘要) → ◇文本回复。
+# 命令行摘要是纯规则引擎,不联网:剥掉 sudo/env 前缀后按 &&/;/| 拆段,
+# 每段匹配 _BASH_RULES 规则表生成一句中文描述,命不中则显示命令前 60 字符。
+_BASH_RULES = [
+    (r"^git\s+status",                        "查看 git 工作区状态"),
+    (r"^git\s+(log|show)",                    "查看 git 提交历史/某次提交内容"),
+    (r"^git\s+diff",                          "查看 git 改动差异"),
+    (r"^git\s+branch",                        "查看/管理 git 分支"),
+    (r"^git\s+add",                           "暂存文件到 git"),
+    (r"^git\s+commit",                        "创建 git 提交"),
+    (r"^git\s+push",                          "推送提交到远端仓库"),
+    (r"^git\s+(pull|fetch)",                  "从远端仓库拉取更新"),
+    (r"^git\s+(checkout|switch)",             "切换 git 分支/工作区文件"),
+    (r"^git\s+merge",                         "合并分支"),
+    (r"^git\s+rebase",                        "变基分支"),
+    (r"^git\s+worktree",                      "管理 git worktree"),
+    (r"^git\s+remote",                        "查看/管理 git 远端配置"),
+    (r"^git\s+",                              "执行 git 操作"),
+    (r"^ls\b",                                "列出目录内容"),
+    (r"^cat\b",                               "查看文件内容"),
+    (r"^head\b",                              "查看文件开头若干行"),
+    (r"^tail\b",                              "查看文件末尾若干行"),
+    (r"^(grep|rg)\b",                         "在文件/内容中搜索关键词"),
+    (r"^find\b",                              "按名称/条件查找文件"),
+    (r"^wc\b",                                "统计文件行数/字数"),
+    (r"^mkdir\b",                             "创建目录"),
+    (r"^touch\b",                             "创建空文件/更新时间戳"),
+    (r"^cp\b",                                "复制文件"),
+    (r"^mv\b",                                "移动/重命名文件"),
+    (r"^rm\b",                                "删除文件/目录"),
+    (r"^chmod\b",                             "修改文件权限"),
+    (r"^(curl|wget)\b",                       "发起 HTTP 请求/下载"),
+    (r"^ssh\b",                               "连接远程服务器执行命令"),
+    (r"^scp\b",                               "跨机复制文件"),
+    (r"^(npm|pnpm|yarn)\s+(install|i)\b",     "安装 Node 依赖包"),
+    (r"^(npm|pnpm|yarn)\s+(run|test)\b",      "运行 npm 脚本/测试"),
+    (r"^(npm|pnpm|yarn)\b",                   "执行 Node 包管理操作"),
+    (r"^(pip|pip3)\s+install\b",              "安装 Python 依赖包"),
+    (r"^(python|python3)\b.*\.py",            "运行 Python 脚本"),
+    (r"^(python|python3)\b",                  "执行 Python 命令"),
+    (r"^(node)\b",                            "执行 Node 命令/脚本"),
+    (r"^(docker|podman)\s+(ps|images|logs)",  "查看容器/镜像/日志状态"),
+    (r"^(docker|podman)\s+(run|exec)",        "启动/进入容器执行命令"),
+    (r"^(docker|podman)\s+(build)",           "构建容器镜像"),
+    (r"^(docker|podman)\b",                   "执行容器操作"),
+    (r"^(kubectl)\b",                         "操作 Kubernetes 集群资源"),
+    (r"^(cd)\b",                              "切换工作目录"),
+    (r"^(echo)\b",                            "输出文本"),
+    (r"^(which|where|type)\b",                "查找可执行文件位置"),
+    (r"^(export|set)\b",                      "设置环境变量"),
+    (r"^(tar|unzip|gzip)\b",                  "解压/打包文件"),
+    (r"^(pytest|unittest)\b",                 "运行 Python 测试"),
+    (r"^(make)\b",                            "执行 Makefile 构建目标"),
+]
+
+def summarize_bash(cmd):
+    """对 Bash 工具的命令给出一句'大概干了什么'的总结(纯规则,不联网)。"""
+    cmd = (cmd or "").strip()
+    # 去掉 sudo / 环境变量前缀,便于匹配
+    m = re.match(r"^(?:sudo\s+|[\w]+=\S+\s+)*", cmd)
+    body = cmd[m.end():]
+    # 管道/&& 组合:总结每一段,用 → 连接
+    parts = re.split(r"\s*(?:&&|\|\||;|\|)\s*", body)
+    parts = [p for p in parts if p.strip()]
+    if len(parts) > 4:
+        parts = parts[:4] + ["…"]
+    summaries = []
+    for p in parts:
+        s = None
+        for pat, desc in _BASH_RULES:
+            if re.search(pat, p.strip()):
+                s = desc
+                break
+        if s is None:
+            s = f"执行命令: {p.strip()[:60]}"
+        summaries.append(s)
+    return " → ".join(summaries)
+
+def summarize_tool(name, inp):
+    """非 Bash 工具的一句话摘要。"""
+    inp = inp or {}
+    try:
+        if name == "Read":
+            return f"读取文件 {inp.get('file_path','?')}"
+        if name in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
+            return f"{'写入' if name=='Write' else '编辑'}文件 {inp.get('file_path', inp.get('notebook_path','?'))}"
+        if name in ("Glob",):
+            return f"按模式查找文件 {inp.get('pattern','?')}"
+        if name in ("Grep",):
+            return f"搜索内容 /{inp.get('pattern','?')}/"
+        if name == "Bash":
+            return summarize_bash(inp.get("command", ""))
+        if name == "Task" or name == "Agent":
+            return f"启动子代理({inp.get('subagent_type','general')}): {(inp.get('description') or '')[:50]}"
+        if name == "WebSearch":
+            return f"联网搜索: {inp.get('query','?')}"
+        if name == "WebFetch":
+            return f"抓取网页: {inp.get('url','?')}"
+        if name == "TodoWrite" or name == "TaskCreate":
+            return "更新任务清单"
+        # 其他工具:显示前 100 字符的入参
+        s = json.dumps(inp, ensure_ascii=False)
+        return f"入参: {s[:100]}"
+    except Exception:
+        return ""
+
+def _clip(s, n):
+    s = str(s).strip()
+    return s if len(s) <= n else s[:n] + " …"
+
+def trace_session(path, max_think=600):
+    """按轮次回放思维链条:用户输入 → ◆想法 → ▶工具(含命令总结) → ◇回复。"""
+    step = 0
+    print(f"{C['c']}═══ 思维链条回放: {os.path.basename(path)} ═══{C['x']}\n")
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for ln in f:
+            try:
+                d = json.loads(ln)
+            except Exception:
+                continue
+            typ = d.get("type")
+            ts = (d.get("timestamp") or "")[:19].replace("T", " ")
+            if typ == "user":
+                msg = d.get("message") or {}
+                c = msg.get("content")
+                # 只显示用户真正输入的文本,跳过 tool_result 回包
+                text = ""
+                if isinstance(c, str):
+                    text = c
+                elif isinstance(c, list):
+                    texts = [x.get("text","") for x in c if isinstance(x, dict) and x.get("type")=="text"]
+                    text = "\n".join(t for t in texts if t.strip())
+                if text.strip():
+                    step += 1
+                    print(f"{C['b']}【第 {step} 轮 · 用户输入】({ts}){C['x']}")
+                    print(f"{C['bold']}  {_clip(text, 300)}{C['x']}\n")
+            elif typ == "assistant":
+                msg = d.get("message") or {}
+                c = msg.get("content")
+                if not isinstance(c, list):
+                    continue
+                for item in c:
+                    if not isinstance(item, dict):
+                        continue
+                    t = item.get("type")
+                    if t == "thinking":
+                        think = (item.get("thinking") or "").strip()
+                        if think:
+                            print(f"{C['c']}  ◆ 想法: {C['x']}{C['dim']}{_clip(think, max_think)}{C['x']}")
+                    elif t == "text":
+                        txt = (item.get("text") or "").strip()
+                        if txt:
+                            print(f"{C['m']}  ◇ 回复: {_clip(txt, 400)}{C['x']}")
+                    elif t == "tool_use":
+                        name = item.get("name", "?")
+                        summary = summarize_tool(name, item.get("input", {}))
+                        print(f"{C['y']}  ▶ 工具 {name}{C['x']}: {summary}")
+                        if name == "Bash":
+                            cmd = (item.get("input") or {}).get("command", "")
+                            print(f"{C['dim']}      $ {_clip(cmd, 200)}{C['x']}")
+                # 每个 assistant 块之后空一行,形成"一步"
+                print()
+    print(f"{C['c']}═══ 回放结束,共 {step} 轮对话 ═══{C['x']}")
+
 def main():
     ap = argparse.ArgumentParser(description="实时跟踪 Claude Code session 的完整输入输出")
     ap.add_argument("path", nargs="?", help="jsonl 路径或 session id(前缀即可);不填则 --select 或自动选最新")
@@ -222,6 +390,8 @@ def main():
     ap.add_argument("--all", action="store_true", help="从头到尾全量回放整个会话历史后退出")
     ap.add_argument("--tail", type=int, default=0, help="回放最后 N 行后退出(0=实时跟踪新模式)")
     ap.add_argument("--grep", default=None, help="只显示包含该关键词的消息(忽略大小写)")
+    ap.add_argument("--trace", action="store_true", help="输出会话的思维链条(想法/工具/命令总结)后退出")
+    ap.add_argument("--think", type=int, default=600, help="--trace 时 thinking 每段最多显示字符数(默认600)")
     ap.add_argument("--ascii", action="store_true", help="纯 ASCII 框线,不依赖 Unicode/ANSI(老终端用)")
     ap.add_argument("--projects", default=None, help=f"Claude transcript 目录(默认 {DEFAULT_PROJ})")
     ap.add_argument("--resume", default=None, metavar="ID",
@@ -280,6 +450,24 @@ def main():
         import subprocess
         rc = subprocess.call([claude_bin, "--resume", sid], cwd=cwd)
         sys.exit(rc)
+
+    # --trace <前缀|路径>:解析成唯一 session 后,输出思维链条回放并退出
+    if args.trace:
+        if not args.path:
+            sys.exit("用法: watch-cc --trace <sessionId前缀>   # 前缀来自 watch-cc --list")
+        if os.path.exists(args.path):
+            tpath = args.path
+        else:
+            trows = list_sessions()
+            tmatches = [r[0] for r in trows if os.path.basename(r[0]).startswith(args.path)]
+            if not tmatches:
+                sys.exit(f"找不到匹配 '{args.path}' 的 session")
+            if len(tmatches) > 1:
+                sys.exit(f"session 前缀 '{args.path}' 匹配到 {len(tmatches)} 个,请用更长的前缀:\n  "
+                         + "\n  ".join(os.path.basename(m) for m in tmatches))
+            tpath = tmatches[0]
+        trace_session(tpath, args.think)
+        return
 
     # --list:只列出不跟踪
     if args.list:
