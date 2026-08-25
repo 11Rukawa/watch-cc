@@ -76,6 +76,8 @@ watch-cc <id> --all --grep "关键词"   # 全量回放 + 按关键词过滤
 watch-cc <id> --raw          # 打印每行原始 JSON(等价 jq .)
 watch-cc --resume <id>       # 在会话原工作目录起新 claude 进程并 resume 该会话
 watch-cc --path <id>         # 只输出该会话 transcript 文件的完整路径
+watch-cc --trace <id>        # 输出该会话的"思维链条"(想法/工具/命令总结)
+watch-cc --trace <id> --think 1000   # trace 时 thinking 每段最多显示 1000 字符
 watch-cc --ascii             # 纯 ASCII 模式(老终端 / 中文乱码时用)
 watch-cc --projects <路径>   # 指向自定义的 transcript 目录
 ```

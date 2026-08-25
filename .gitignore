@@ -62,3 +62,4 @@ Thumbs.db
 *.jsonl
 # 但 tests/ 下的 fixture 必须提交(CI 依赖它)
 !tests/**/*.jsonl
+scratch/
